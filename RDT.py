@@ -91,10 +91,41 @@ class RDT:
             
     
     def rdt_2_1_send(self, msg_S):
-        pass
+        p = Packet(self.seq_num, msg_S)
+        sequence = self.seq_num
+        #while sequence numbers start the same run
+        while(sequence == self.seq_num):
+            self.network.udt_send(p.get_byte_S())
+            reply = 0
+
+            while(reply == 0):
+                reply = self.network.udt_receive()
+            # grab length of packet received
+            message_length = int(reply[0:Packet.length_S_length])
+            #create buffer for the packet length
+            self.byte_buffer = reply[message_length:]
+            #checking for packet corruption
+            if(Packet.corrupt(reply[:message_length])):
+                self.byte_buffer = ''
+            else:
+                response = Packet.from_byte_S(reply[:message_length])
+                #keep sending packet while sequence number is behind
+                if(response.seq_num < self.seq_num):
+                    behind = Packet(response.seq_num, '1')
+                    self.network.udt_send(behind.get_byte_S())
+                #response message is equal to 1 then increment ACK
+                elif(response.msg_S == '1'):
+                    self.seq_num +=1
+                #response message is 0 then reset the byte_buffer NAK
+                elif(response.msg_S == '0'):
+                    self.byte_buffer = ''
+
         
     def rdt_2_1_receive(self):
-        pass
+        ret_S = None
+        byte_S = self.network.udt_receive()
+        self.byte_buffer += byte_S
+        sequence = self.seq_num
     
     def rdt_3_0_send(self, msg_S):
         pass
@@ -112,16 +143,16 @@ if __name__ == '__main__':
     
     rdt = RDT(args.role, args.server, args.port)
     if args.role == 'client':
-        rdt.rdt_1_0_send('MSG_FROM_CLIENT')
+        rdt.rdt_2_1_send('MSG_FROM_CLIENT')
         sleep(2)
-        print(rdt.rdt_1_0_receive())
+        print(rdt.rdt_2_1_receive())
         rdt.disconnect()
         
         
     else:
         sleep(1)
-        print(rdt.rdt_1_0_receive())
-        rdt.rdt_1_0_send('MSG_FROM_SERVER')
+        print(rdt.rdt_2_1_receive())
+        rdt.rdt_2_1_send('MSG_FROM_SERVER')
         rdt.disconnect()
         
 
