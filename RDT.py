@@ -50,7 +50,7 @@ class Packet:
         computed_checksum_S = checksum.hexdigest()
         #and check if the same
         return checksum_S != computed_checksum_S
-        
+
 
 class RDT:
     ## latest sequence number used in a packet
@@ -62,7 +62,7 @@ class RDT:
 
     def __init__(self, role_S, server_S, port):
         self.network = Network.NetworkLayer(role_S, server_S, port)
-
+        self.confirm = ''
     
     def disconnect(self):
         self.network.disconnect()
@@ -96,10 +96,11 @@ class RDT:
     def rdt_2_1_send(self, msg_S):
         ret_S = None
         p = Packet(self.seq_num, msg_S)
-        self.seq_num -= 1
+        self.seq_num = 1
         self.network.udt_send(p.get_byte_S())
-        logging.debug("Before True")
+
         while True:
+
             byte_S = self.network.udt_receive()
             self.byte_buffer += byte_S
             # check if we have received enough bytes
@@ -107,20 +108,17 @@ class RDT:
                 return ret_S  # not enough bytes to read packet length
             # extract length of packet
             length = int(self.byte_buffer[:Packet.length_S_length])
-            if len(self.byte_buffer) < length:
-                return ret_S  # not enough bytes to read the whole packet
-            # create packet from buffer content and add to return string
-            pt = Packet.from_byte_S(self.byte_buffer[0:length])
-            ack = str(pt.msg_S)
-            if(p.corrupt(byte_S) or ack == 'NAK'):
+
+            if(not Packet.corrupt(self.byte_buffer[0:length])):
+
+                if(self.confirm == 'NAK'):
+                    self.network.udt_send(p.get_byte_S())
+
+                elif(self.confirm == 'ACK'):
+                    self.seq_num = 0
+                    self.network.udt_send(p.get_byte_S())
+            else:
                 self.network.udt_send(p.get_byte_S())
-
-            elif(not p.corrupt() and ack == 'ACK'):
-                self.seq_num = 0
-                p = Packet(self.seq_num, msg_S)
-                self.network.udt_send(p.get_byte_S())
-
-
 
         
     def rdt_2_1_receive(self):
@@ -137,20 +135,25 @@ class RDT:
             length = int(self.byte_buffer[:Packet.length_S_length])
             if len(self.byte_buffer) < length:
                 return ret_S  # not enough bytes to read the whole packet
-            # create packet from buffer content and add to return string
 
-
-            if (self.seq_num == 0 and not Packet.corrupt(byte_S)):
-                p = Packet.from_byte_S(self.byte_buffer[0:length])
-                self.seq_num = 1
-                ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
-             # remove the packet bytes from the buffer
-                self.byte_buffer = self.byte_buffer[length:]
-                pa = Packet(self.seq_num, 'ACK')
-                self.network.udt_send(pa.get_byte_S())
+            if(Packet.corrupt(self.byte_buffer[0:length])):
+                self.confirm = 'NAK'
+                break
             else:
-                pn = Packet(self.seq_num, 'NAK')
-                self.network.udt_send(pn.get_byte_S())
+                p = Packet.from_byte_S(self.byte_buffer[0:length])
+
+            if (self.seq_num == p.seq_num):
+
+                ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
+                self.confirm = 'ACK'
+                # remove the packet bytes from the buffer
+                self.byte_buffer = self.byte_buffer[length:]
+                return ret_S
+
+            else:
+                self.confirm = 'NAK'
+                self.network.udt_send(p.get_byte_S())
+                break
 
 
     
