@@ -2,7 +2,7 @@ import Network
 import argparse
 from time import sleep
 import hashlib
-
+import logging
 
 class Packet:
     ## the number of bytes used to store packet length
@@ -67,37 +67,38 @@ class RDT:
     def disconnect(self):
         self.network.disconnect()
         
-    def rdt_1_0_send(self, msg_S):
-        p = Packet(self.seq_num, msg_S)
-        self.seq_num += 1
-        self.network.udt_send(p.get_byte_S())
-        
-    def rdt_1_0_receive(self):
-        ret_S = None
-        byte_S = self.network.udt_receive()
-        self.byte_buffer += byte_S
-        #keep extracting packets - if reordered, could get more than one
-        while True:
-            #check if we have received enough bytes
-            if(len(self.byte_buffer) < Packet.length_S_length):
-                return ret_S #not enough bytes to read packet length
-            #extract length of packet
-            length = int(self.byte_buffer[:Packet.length_S_length])
-            if len(self.byte_buffer) < length:
-                return ret_S #not enough bytes to read the whole packet
-            #create packet from buffer content and add to return string
-            p = Packet.from_byte_S(self.byte_buffer[0:length])
-            ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
-            #remove the packet bytes from the buffer
-            self.byte_buffer = self.byte_buffer[length:]
-            #if this was the last packet, will return on the next iteration
-            
+    # def rdt_1_0_send(self, msg_S):
+    #     p = Packet(self.seq_num, msg_S)
+    #     self.seq_num += 1
+    #     self.network.udt_send(p.get_byte_S())
+    #
+    # def rdt_1_0_receive(self):
+    #     ret_S = None
+    #     byte_S = self.network.udt_receive()
+    #     self.byte_buffer += byte_S
+    #     #keep extracting packets - if reordered, could get more than one
+    #     while True:
+    #         #check if we have received enough bytes
+    #         if(len(self.byte_buffer) < Packet.length_S_length):
+    #             return ret_S #not enough bytes to read packet length
+    #         #extract length of packet
+    #         length = int(self.byte_buffer[:Packet.length_S_length])
+    #         if len(self.byte_buffer) < length:
+    #             return ret_S #not enough bytes to read the whole packet
+    #         #create packet from buffer content and add to return string
+    #         p = Packet.from_byte_S(self.byte_buffer[0:length])
+    #         ret_S = p.msg_S if (ret_S is None) else ret_S + p.msg_S
+    #         #remove the packet bytes from the buffer
+    #         self.byte_buffer = self.byte_buffer[length:]
+    #         #if this was the last packet, will return on the next iteration
+    #
     
     def rdt_2_1_send(self, msg_S):
-        self.seq_num = 0
         ret_S = None
         p = Packet(self.seq_num, msg_S)
+        self.seq_num -= 1
         self.network.udt_send(p.get_byte_S())
+        logging.debug("Before True")
         while True:
             byte_S = self.network.udt_receive()
             self.byte_buffer += byte_S
@@ -111,7 +112,7 @@ class RDT:
             # create packet from buffer content and add to return string
             pt = Packet.from_byte_S(self.byte_buffer[0:length])
 
-            if(p.corrupt() or pt.msg_S == 'NAK'):
+            if(p.corrupt(byte_S) or pt.msg_S == 'NAK'):
                 self.network.udt_send(p.get_byte_S())
 
             elif(not p.corrupt() and pt.msg_S == 'ACK'):
