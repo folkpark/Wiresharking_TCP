@@ -111,11 +111,11 @@ class RDT:
                 return ret_S  # not enough bytes to read the whole packet
             # create packet from buffer content and add to return string
             pt = Packet.from_byte_S(self.byte_buffer[0:length])
-
-            if(p.corrupt(byte_S) or pt.msg_S == 'NAK'):
+            ack = str(pt.msg_S)
+            if(p.corrupt(byte_S) or ack == 'NAK'):
                 self.network.udt_send(p.get_byte_S())
 
-            elif(not p.corrupt() and pt.msg_S == 'ACK'):
+            elif(not p.corrupt() and ack == 'ACK'):
                 self.seq_num = 0
                 p = Packet(self.seq_num, msg_S)
                 self.network.udt_send(p.get_byte_S())
