@@ -105,7 +105,7 @@ class RDT:
             self.byte_buffer += byte_S
             # check if we have received enough bytes
             if (len(self.byte_buffer) < Packet.length_S_length):
-                return ret_S  # not enough bytes to read packet length
+                break  # not enough bytes to read packet length
             # extract length of packet
             length = int(self.byte_buffer[:Packet.length_S_length])
 
@@ -118,7 +118,7 @@ class RDT:
                     self.seq_num = 0
                     self.network.udt_send(p.get_byte_S())
             else:
-                self.network.udt_send(p.get_byte_S())
+                self.rdt_2_1_send(self, msg_S)
 
         
     def rdt_2_1_receive(self):
@@ -130,11 +130,11 @@ class RDT:
         while True:
             # check if we have received enough bytes
             if (len(self.byte_buffer) < Packet.length_S_length):
-                return ret_S  # not enough bytes to read packet length
+                break # not enough bytes to read packet length
             # extract length of packet
             length = int(self.byte_buffer[:Packet.length_S_length])
             if len(self.byte_buffer) < length:
-                return ret_S  # not enough bytes to read the whole packet
+                break  # not enough bytes to read the whole packet
 
             if(Packet.corrupt(self.byte_buffer[0:length])):
                 self.confirm = 'NAK'
