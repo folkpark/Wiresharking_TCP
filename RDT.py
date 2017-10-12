@@ -63,6 +63,7 @@ class RDT:
     def __init__(self, role_S, server_S, port):
         self.network = Network.NetworkLayer(role_S, server_S, port)
         self.confirm = ''
+        self.message = ''
     
     def disconnect(self):
         self.network.disconnect()
@@ -95,35 +96,38 @@ class RDT:
     
     def rdt_2_1_send(self, msg_S):
         ret_S = None
-        p = Packet(self.seq_num, msg_S)
-        self.seq_num = 1
-        self.network.udt_send(p.get_byte_S())
+        if (msg_S != 'ACK' or msg_S != 'NAK'):
+            self.message = msg_S
+            p = Packet(self.seq_num, msg_S)
+            self.network.udt_send(p.get_byte_S())
 
-        while True:
+        # while True:
+        #
+        #     byte_S = self.network.udt_receive()
+        #     self.byte_buffer += byte_S
+        #     # check if we have received enough bytes
+        #     if (len(self.byte_buffer) < Packet.length_S_length):
+        #         break  # not enough bytes to read packet length
+        #     # extract length of packet
+        #     length = int(self.byte_buffer[:Packet.length_S_length])
+        #
+        #     if(not Packet.corrupt(self.byte_buffer[0:length])):
+        #
+        #         if(self.confirm == 'NAK'):
+        #             self.network.udt_send(p.get_byte_S())
+        #
+        #         elif(self.confirm == 'ACK'):
+        #             self.seq_num = 0
+        #             return
+        #     else:
+        #         break
 
-            byte_S = self.network.udt_receive()
-            self.byte_buffer += byte_S
-            # check if we have received enough bytes
-            if (len(self.byte_buffer) < Packet.length_S_length):
-                break  # not enough bytes to read packet length
-            # extract length of packet
-            length = int(self.byte_buffer[:Packet.length_S_length])
-
-            if(not Packet.corrupt(self.byte_buffer[0:length])):
-
-                if(self.confirm == 'NAK'):
-                    self.network.udt_send(p.get_byte_S())
-
-                elif(self.confirm == 'ACK'):
-                    self.seq_num = 0
-                    self.network.udt_send(p.get_byte_S())
-            else:
-                self.rdt_2_1_send(self, msg_S)
-
-        
     def rdt_2_1_receive(self):
         ret_S = None
         byte_S = self.network.udt_receive()
+        if Packet.corrupt(byte_S):
+            self.rdt_2_1_send('NAK')
+
         self.byte_buffer += byte_S
 
         # keep extracting packets - if reordered, could get more than one
@@ -133,14 +137,11 @@ class RDT:
                 break # not enough bytes to read packet length
             # extract length of packet
             length = int(self.byte_buffer[:Packet.length_S_length])
+
             if len(self.byte_buffer) < length:
                 break  # not enough bytes to read the whole packet
 
-            if(Packet.corrupt(self.byte_buffer[0:length])):
-                self.confirm = 'NAK'
-                break
-            else:
-                p = Packet.from_byte_S(self.byte_buffer[0:length])
+            p = Packet.from_byte_S(self.byte_buffer[0:length])
 
             if (self.seq_num == p.seq_num):
 
@@ -152,7 +153,7 @@ class RDT:
 
             else:
                 self.confirm = 'NAK'
-                self.network.udt_send(p.get_byte_S())
+                self.rdt_2_1_send()
                 break
 
 
