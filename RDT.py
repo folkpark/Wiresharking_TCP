@@ -96,10 +96,11 @@ class RDT:
     
     def rdt_2_1_send(self, msg_S):
         ret_S = None
-        if (msg_S != 'ACK' or msg_S != 'NAK'):
-            self.message = msg_S
-            p = Packet(self.seq_num, msg_S)
-            self.network.udt_send(p.get_byte_S())
+        if (msg_S == 'NAK'):
+            msg_S = self.message
+        p = Packet(self.seq_num, msg_S)
+        self.network.udt_send(p.get_byte_S())
+        self.message = msg_S
 
         # while True:
         #
@@ -125,7 +126,7 @@ class RDT:
     def rdt_2_1_receive(self):
         ret_S = None
         byte_S = self.network.udt_receive()
-        if Packet.corrupt(byte_S):
+        if byte_S == '':
             self.rdt_2_1_send('NAK')
 
         self.byte_buffer += byte_S
@@ -140,8 +141,11 @@ class RDT:
 
             if len(self.byte_buffer) < length:
                 break  # not enough bytes to read the whole packet
-
-            p = Packet.from_byte_S(self.byte_buffer[0:length])
+            if(not Packet.corrupt(self.byte_buffer[0:length])):
+                p = Packet.from_byte_S(self.byte_buffer[0:length])
+            else:
+                self.rdt_2_1_send('NAK')
+                break
 
             if (self.seq_num == p.seq_num):
 
